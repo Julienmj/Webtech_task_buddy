@@ -12,6 +12,15 @@ const statusMessage = ref('')
 // Sidebar navigation state
 const activeNav = ref('dashboard')
 
+// Create task form state
+const showCreateTaskForm = ref(false)
+const newTask = ref({
+  title: '',
+  description: '',
+  priority: 'Medium',
+  dueDate: ''
+})
+
 // Task statistics
 const todayTasks = computed(() => {
   const today = new Date().toISOString().split('T')[0]
@@ -79,6 +88,29 @@ function handleDelete(id) {
   const title = task?.title ?? 'Task'
   tasksStore.removeTask(id)
   announceToScreenReader(`${title} deleted. ${tasksStore.tasks.length} task${tasksStore.tasks.length === 1 ? '' : 's'} remaining.`)
+}
+
+function handleCreateTask() {
+  if (newTask.value.title.trim()) {
+    const taskTitle = newTask.value.title
+    tasksStore.addTask(newTask.value.title, {
+      description: newTask.value.description,
+      priority: newTask.value.priority,
+      dueDate: newTask.value.dueDate,
+      status: 'To Do'
+    })
+    
+    // Reset form
+    newTask.value = {
+      title: '',
+      description: '',
+      priority: 'Medium',
+      dueDate: ''
+    }
+    showCreateTaskForm.value = false
+    
+    announceToScreenReader(`Task "${taskTitle}" added successfully.`)
+  }
 }
 
 function handleLogout() {
@@ -210,11 +242,57 @@ if (tasksStore.tasks.length === 0) {
           <h1 class="dashboard-title">Dashboard</h1>
           <p class="dashboard-subtitle">Here's a list of your tasks for this week.</p>
         </div>
-        <button class="create-task-btn">
+        <button @click="showCreateTaskForm = !showCreateTaskForm" class="create-task-btn">
           <span class="plus-icon">+</span>
           Create Task
         </button>
       </header>
+
+      <!-- Create Task Form (Hidden by default) -->
+      <section v-if="showCreateTaskForm" class="create-task-section">
+        <div class="create-task-card">
+          <h3>Create New Task</h3>
+          <form @submit.prevent="handleCreateTask" class="task-form">
+            <div class="form-group">
+              <label>Task Title</label>
+              <input 
+                v-model="newTask.title" 
+                type="text" 
+                placeholder="Enter task title"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea 
+                v-model="newTask.description" 
+                placeholder="Enter task description"
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Priority</label>
+                <select v-model="newTask.priority">
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Due Date</label>
+                <input 
+                  v-model="newTask.dueDate" 
+                  type="date"
+                />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Add Task</button>
+              <button type="button" @click="showCreateTaskForm = false" class="btn btn-secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </section>
 
       <!-- Task Cards -->
       <section class="task-cards">
@@ -251,6 +329,13 @@ if (tasksStore.tasks.length === 0) {
               <option value="In Progress">In Progress</option>
               <option value="Completed">Completed</option>
             </select>
+            <button 
+              @click="handleDelete(task.id)" 
+              class="delete-btn"
+              title="Delete task"
+            >
+              ×
+            </button>
           </div>
         </div>
       </section>
@@ -573,6 +658,9 @@ if (tasksStore.tasks.length === 0) {
 
 .task-status {
   margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .status-dropdown {
@@ -584,11 +672,132 @@ if (tasksStore.tasks.length === 0) {
   cursor: pointer;
 }
 
+.delete-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: background-color 0.2s ease;
+}
+
+.delete-btn:hover {
+  background: #dc2626;
+}
+
 .hint-text {
   text-align: center;
   color: #9ca3af;
   font-size: 0.875rem;
   font-style: italic;
+}
+
+/* Create Task Form Styles */
+.create-task-section {
+  margin-bottom: 2rem;
+}
+
+.create-task-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.create-task-card h3 {
+  margin: 0 0 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
 }
 
 /* Responsive Design */
