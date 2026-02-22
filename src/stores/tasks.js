@@ -6,12 +6,29 @@ export const TASK_PRIORITIES = ['Low', 'Medium', 'High']
 
 export const useTasksStore = defineStore('tasks', () => {
   const tasks = ref([
-    { id: 1, title: 'Learn Vue3', completed: false, category: 'Personal', dueDate: null, priority: 'Medium' },
-    { id: 2, title: 'Build TaskBuddy', completed: false, category: 'Work', dueDate: null, priority: 'High' },
-    { id: 3, title: 'Deploy', completed: false, category: 'Work', dueDate: null, priority: 'Medium' },
+    { 
+      id: 1, 
+      title: 'Grocery Shopping', 
+      description: 'Buy milk, eggs, and bread',
+      completed: false, 
+      category: 'Personal', 
+      dueDate: '2024-11-20', 
+      priority: 'Medium',
+      status: 'In Progress'
+    },
+    { 
+      id: 2, 
+      title: 'Complete Math Assignment', 
+      description: 'Chapter 5 exercises 1-10',
+      completed: false, 
+      category: 'Work', 
+      dueDate: '2024-12-01', 
+      priority: 'High',
+      status: 'To Do'
+    },
   ])
 
-  let nextId = 4
+  let nextId = 3
 
   const activeTasks = computed(() => tasks.value.filter((t) => !t.completed))
   const completedTasks = computed(() => tasks.value.filter((t) => t.completed))
@@ -21,10 +38,12 @@ export const useTasksStore = defineStore('tasks', () => {
     const task = {
       id: nextId++,
       title: title.trim(),
+      description: options.description || '',
       completed: false,
       category: options.category ?? 'Personal',
       dueDate: options.dueDate ?? null,
       priority: options.priority ?? 'Medium',
+      status: options.status ?? 'To Do'
     }
     tasks.value.push(task)
     return task
@@ -41,6 +60,9 @@ export const useTasksStore = defineStore('tasks', () => {
     const task = tasks.value.find((t) => t.id === id)
     if (!task) return false
     task.completed = !task.completed
+    if (task.completed) {
+      task.status = 'Completed'
+    }
     return true
   }
 

@@ -1,12 +1,52 @@
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useTasksStore } from '../stores/tasks'
-import AddTaskForm from '../components/AddTaskForm.vue'
-import TaskList from '../components/TaskList.vue'
-import CounterSection from '../components/CounterSection.vue'
+import { useAuthStore } from '../stores/auth'
 
+const router = useRouter()
 const tasksStore = useTasksStore()
+const authStore = useAuthStore()
 const statusMessage = ref('')
+
+// Sidebar navigation state
+const activeNav = ref('dashboard')
+
+// Task statistics
+const todayTasks = computed(() => {
+  const today = new Date().toISOString().split('T')[0]
+  return tasksStore.tasks.filter(task => task.dueDate === today && !task.completed).length
+})
+
+const upcomingTasks = computed(() => {
+  const today = new Date().toISOString().split('T')[0]
+  return tasksStore.tasks.filter(task => task.dueDate > today && !task.completed).length
+})
+
+const overdueTasks = computed(() => {
+  const today = new Date().toISOString().split('T')[0]
+  return tasksStore.tasks.filter(task => task.dueDate && task.dueDate < today && !task.completed).length
+})
+
+const completionRate = computed(() => {
+  if (tasksStore.tasks.length === 0) return 0
+  const completed = tasksStore.tasks.filter(task => task.completed).length
+  return Math.round((completed / tasksStore.tasks.length) * 100)
+})
+
+// Filter tasks based on sidebar selection
+const filteredTasks = computed(() => {
+  switch (activeNav.value) {
+    case 'todo':
+      return tasksStore.tasks.filter(task => !task.completed && task.status === 'To Do')
+    case 'inprogress':
+      return tasksStore.tasks.filter(task => !task.completed && task.status === 'In Progress')
+    case 'completed':
+      return tasksStore.tasks.filter(task => task.completed)
+    default:
+      return tasksStore.tasks
+  }
+})
 
 function announceToScreenReader(message) {
   statusMessage.value = ''
@@ -40,34 +80,187 @@ function handleDelete(id) {
   tasksStore.removeTask(id)
   announceToScreenReader(`${title} deleted. ${tasksStore.tasks.length} task${tasksStore.tasks.length === 1 ? '' : 's'} remaining.`)
 }
+
+function handleLogout() {
+  authStore.logout()
+  router.push('/login')
+}
+
+function updateTaskStatus(id, status) {
+  tasksStore.updateTask(id, { status })
+}
+
+function navigateTo(section) {
+  activeNav.value = section
+}
+
+// Add sample tasks with status if they don't exist
+if (tasksStore.tasks.length === 0) {
+  tasksStore.addTask('Grocery Shopping', {
+    category: 'Personal',
+    priority: 'Medium',
+    dueDate: '2024-11-20',
+    status: 'In Progress'
+  })
+  tasksStore.addTask('Complete Math Assignment', {
+    category: 'Work',
+    priority: 'High',
+    dueDate: '2024-12-01',
+    status: 'To Do'
+  })
+}
 </script>
 
 <template>
-  <main
-    id="main-content"
-    class="task-buddy"
-    role="main"
-    aria-labelledby="taskbuddy-heading"
-    aria-label="TaskBuddy task manager"
-  >
-    <h1 class="title" id="taskbuddy-heading">TaskBuddy</h1>
+  <div class="dashboard-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-text">Task-Buddy</span>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a 
+          href="#" 
+          class="nav-item" 
+          :class="{ active: activeNav === 'dashboard' }"
+          @click.prevent="navigateTo('dashboard')"
+        >
+          Dashboard
+        </a>
+        <a 
+          href="#" 
+          class="nav-item" 
+          :class="{ active: activeNav === 'todo' }"
+          @click.prevent="navigateTo('todo')"
+        >
+          To Do
+        </a>
+        <a 
+          href="#" 
+          class="nav-item" 
+          :class="{ active: activeNav === 'inprogress' }"
+          @click.prevent="navigateTo('inprogress')"
+        >
+          In Progress
+        </a>
+        <a 
+          href="#" 
+          class="nav-item" 
+          :class="{ active: activeNav === 'completed' }"
+          @click.prevent="navigateTo('completed')"
+        >
+          Completed
+        </a>
+      </nav>
+      
+      <div class="account-section">
+        <div class="user-info">
+          <div class="user-avatar">{{ authStore.userEmail?.[0]?.toUpperCase() || 'S' }}</div>
+          <span class="user-name">{{ authStore.userEmail?.split('@')[0] || 'student' }}</span>
+        </div>
+        <button @click="handleLogout" class="logout-link">Log out</button>
+      </div>
+    </aside>
 
-    <!-- Live region: screen readers announce when this text changes -->
-    <div
-      class="sr-only"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      {{ statusMessage }}
-    </div>
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Live region: screen readers announce when this text changes -->
+      <div
+        class="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {{ statusMessage }}
+      </div>
 
-    <AddTaskForm @submit="handleAddTask" />
+      <!-- Task Summary Cards -->
+      <section class="summary-cards">
+        <div class="summary-card">
+          <h3 class="card-title">TODAY'S TASKS</h3>
+          <div class="card-value">{{ todayTasks }}</div>
+          <div class="card-subtitle">Due Today</div>
+        </div>
+        
+        <div class="summary-card">
+          <h3 class="card-title">UPCOMING</h3>
+          <div class="card-value">{{ upcomingTasks }}</div>
+          <div class="card-subtitle">Scheduled</div>
+        </div>
+        
+        <div class="summary-card overdue">
+          <h3 class="card-title">OVERDUE</h3>
+          <div class="card-value overdue-value">{{ overdueTasks }}</div>
+          <div class="card-subtitle overdue-subtitle">Needs Attention</div>
+        </div>
+        
+        <div class="summary-card">
+          <h3 class="card-title">COMPLETION</h3>
+          <div class="card-value">{{ completionRate }}%</div>
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: completionRate + '%' }"></div>
+          </div>
+        </div>
+      </section>
 
-    <TaskList :tasks="tasksStore.tasks" @complete="handleComplete" @delete="handleDelete" />
+      <!-- Dashboard Header -->
+      <header class="dashboard-header">
+        <div>
+          <h1 class="dashboard-title">Dashboard</h1>
+          <p class="dashboard-subtitle">Here's a list of your tasks for this week.</p>
+        </div>
+        <button class="create-task-btn">
+          <span class="plus-icon">+</span>
+          Create Task
+        </button>
+      </header>
 
-    <CounterSection />
-  </main>
+      <!-- Task Cards -->
+      <section class="task-cards">
+        <div 
+          v-for="task in filteredTasks" 
+          :key="task.id"
+          class="task-card"
+        >
+          <!-- Priority Tag -->
+          <div class="priority-tag" :class="task.priority?.toLowerCase()">
+            {{ task.priority?.toUpperCase() }}
+          </div>
+          
+          <!-- Task Content -->
+          <div class="task-content">
+            <h3 class="task-title">{{ task.title }}</h3>
+            <p class="task-description">{{ task.description || 'No description provided' }}</p>
+            
+            <!-- Due Date -->
+            <div v-if="task.dueDate" class="task-due-date">
+              <span class="due-label">Due:</span>
+              <span class="due-date">{{ task.dueDate }}</span>
+            </div>
+          </div>
+          
+          <!-- Status Dropdown -->
+          <div class="task-status">
+            <select 
+              :value="task.status || 'To Do'" 
+              @change="updateTaskStatus(task.id, $event.target.value)"
+              class="status-dropdown"
+            >
+              <option value="To Do">To Do</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Hint Text -->
+      <div class="hint-text">
+        Double-click a card to share.
+      </div>
+    </main>
+  </div>
 </template>
 
 <style scoped>
@@ -83,18 +276,360 @@ function handleDelete(id) {
   border: 0;
 }
 
-.task-buddy {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 1.5rem;
+.dashboard-container {
+  display: flex;
   min-height: 100vh;
-  background: #e8f5e9;
+  background: #f8fafc;
 }
 
-.title {
-  margin: 0 0 1.25rem;
+/* Sidebar Styles */
+.sidebar {
+  width: 250px;
+  background: white;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+}
+
+.logo {
+  margin-bottom: 2rem;
+}
+
+.logo-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.nav-item {
+  padding: 0.75rem 1rem;
+  color: #64748b;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.nav-item:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.nav-item.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.account-section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1.5rem;
+  margin-top: auto;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.user-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.logout-link {
+  color: #64748b;
+  text-decoration: none;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.logout-link:hover {
+  color: #ef4444;
+}
+
+/* Main Content Styles */
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+/* Summary Cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.summary-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+.summary-card.overdue {
+  border-color: #fecaca;
+}
+
+.card-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.5rem;
+}
+
+.card-value {
   font-size: 2rem;
   font-weight: 700;
-  color: #6a1b9a;
+  color: #1e293b;
+  margin: 0 0 0.5rem;
+}
+
+.card-value.overdue-value {
+  color: #dc2626;
+}
+
+.card-subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.card-subtitle.overdue-subtitle {
+  color: #dc2626;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  transition: width 0.3s ease;
+}
+
+/* Dashboard Header */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.5rem;
+}
+
+.dashboard-subtitle {
+  color: #64748b;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.create-task-btn {
+  background: #1e293b;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.create-task-btn:hover {
+  background: #374151;
+}
+
+.plus-icon {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+/* Task Cards */
+.task-cards {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.task-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.task-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.priority-tag {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+}
+
+.priority-tag.high {
+  background: #fecaca;
+  color: #dc2626;
+}
+
+.priority-tag.medium {
+  background: #fed7aa;
+  color: #ea580c;
+}
+
+.priority-tag.low {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.task-content {
+  flex: 1;
+}
+
+.task-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.5rem;
+}
+
+.task-description {
+  color: #64748b;
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.task-due-date {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.due-label {
+  color: #64748b;
+}
+
+.due-date {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.task-status {
+  margin-left: auto;
+}
+
+.status-dropdown {
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+}
+
+.hint-text {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .dashboard-container {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 1rem;
+  }
+  
+  .main-content {
+    padding: 1rem;
+  }
+  
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .create-task-btn {
+    justify-content: center;
+  }
+  
+  .task-card {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .task-status {
+    margin-left: 0;
+    align-self: flex-start;
+  }
 }
 </style>
