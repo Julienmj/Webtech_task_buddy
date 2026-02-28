@@ -1,4 +1,4 @@
-# TaskBuddy - Professional Task Management System
+# TaskBuddy - Professional Task Management System.
 
 A comprehensive task management application built with **Vue 3**, **Pinia**, and **Vue Router**. Features complete authentication system, professional dashboard interface, and modern UI/UX design matching educational standards.
 
